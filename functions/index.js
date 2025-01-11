@@ -1,5 +1,5 @@
 const { onRequest } = require("firebase-functions/v2/https");
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 const logger = require("firebase-functions/logger");
 
 // Retrieve MongoDB URI from Firebase environment variables
@@ -63,5 +63,47 @@ exports.register = onRequest(async (req, res) => {
   } catch (error) {
     logger.error("Error during registration:", error);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// **Get Drill Data (Authenticated)**
+// **Get Drills for Authenticated User**
+exports.getDrills = onRequest(async (req, res) => {
+  logger.info("📩 Received request to fetch drills");
+
+  if (req.method !== "POST") {
+    logger.warn("🚫 Method Not Allowed");
+    return res.status(405).send("Method Not Allowed");
+  }
+
+  try {
+    const { userId } = req.body;
+    logger.info(`📌 User ID received: ${userId}`);
+
+    if (!userId || userId.length !== 24) {
+      logger.warn("⚠️ Invalid user ID format");
+      return res.status(400).json({ message: "Invalid user ID format" });
+    }
+
+    const db = await connectToDatabase();
+    const users = db.collection("Users");
+    const drills = db.collection("Drills");
+
+    logger.info(`🔍 Checking if user ${userId} exists`);
+    const user = await users.findOne({ _id: new ObjectId(userId) });
+    logger.info(`here is the fetched user ${user}`);
+    if (!user) {
+      logger.warn("🚫 Unauthorized access: User not found");
+      return res.status(401).json({ message: "Unauthorized access" });
+    }
+
+    logger.info("📡 Fetching drills data...");
+    const drillData = await drills.find().toArray();
+
+    logger.info(`✅ Successfully retrieved ${drillData.length} drills`);
+    return res.status(200).json(drillData);
+  } catch (error) {
+    logger.error("❌ Error fetching drills:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
