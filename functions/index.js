@@ -67,7 +67,6 @@ exports.register = onRequest(async (req, res) => {
 });
 
 // **Get Drill Data (Authenticated)**
-// **Get Drills for Authenticated User**
 exports.getDrills = onRequest(async (req, res) => {
   logger.info("📩 Received request to fetch drills");
 
@@ -105,5 +104,69 @@ exports.getDrills = onRequest(async (req, res) => {
   } catch (error) {
     logger.error("❌ Error fetching drills:", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+//  Add User Drill Info API
+exports.addUserDrillProgress = onRequest(async (req, res) => {
+  if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+
+  try {
+    const { userId, drillId, drillName, completedCount, totalCount } = req.body;
+
+    if (!userId || !drillId || !drillName || completedCount == null || !totalCount) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+
+    const db = await connectToDatabase();
+    const userDrillInfo = db.collection("UserDrillInfo");
+
+    // 🔍 Check if entry already exists
+    const existingEntry = await userDrillInfo.findOne({ userId, drillId });
+
+    if (existingEntry) {
+      // 🔄 Update existing record
+      await userDrillInfo.updateOne(
+        { userId, drillId },
+        { $set: { completedCount } }
+      );
+      return res.status(200).json({ message: "Drill progress updated." });
+    } else {
+      // 🆕 Insert new record
+      await userDrillInfo.insertOne({
+        userId,
+        drillId,
+        drillName,
+        completedCount,
+        totalCount
+      });
+      return res.status(201).json({ message: "Drill progress added." });
+    }
+  } catch (error) {
+    logger.error("❌ Error saving drill progress:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+exports.getUserDrillProgress = onRequest(async (req, res) => {
+  if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    const db = await connectToDatabase();
+    const userDrillInfo = db.collection("UserDrillInfo");
+
+    // 🔍 Fetch all drills for the user
+    const drills = await userDrillInfo.find({ userId }).toArray();
+    
+    res.status(200).json(drills);
+  } catch (error) {
+    logger.error("❌ Error fetching user drills:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
